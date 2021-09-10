@@ -57,15 +57,14 @@ allow an entire page of results to be processed within one window.
 
 """
 
-import time
 import math
-
+import time
 from concurrent.futures import Future
-from requests_futures.sessions import FuturesSession
-from requests.exceptions import HTTPError
-from singer.utils import strptime_to_utc, strftime
-from singer import get_logger
 
+from requests.exceptions import HTTPError
+from requests_futures.sessions import FuturesSession
+from singer import get_logger
+from singer.utils import strftime, strptime_to_utc
 
 logger = get_logger().getChild('tap-bigcommerce')
 
@@ -173,7 +172,7 @@ class Bigcommerce():
 
     base_url = "https://api.bigcommerce.com/stores/"
 
-    results_per_page = 50
+    results_per_page = 150
 
     max_retries = 5
 
@@ -202,7 +201,7 @@ class Bigcommerce():
             ]
         },
         'customers': {
-            'version': 2,
+            'version': 3,
             'path': 'customers',
             'transform_date_fields': [
                 'date_modified',
@@ -210,7 +209,10 @@ class Bigcommerce():
             ],
             'sub_resources': 0,
             'exclude_paths': [
-                ('addresses',)
+                ('accepts_product_review_abandoned_cart_emails',),
+                ('addresses',),
+                ('authentication',),
+                ('channel_ids',)
             ]
         },
         'products': {
@@ -244,9 +246,9 @@ class Bigcommerce():
 
         self.base_url = self.base_url + self.store_hash + '/v{version}'
 
-        self._reset_session()
+        self.reset_session()
 
-    def _reset_session(self):
+    def reset_session(self):
         """
         Sets the self.session object to a new FutureSession
         instance and sets default headers and responce hook.
@@ -334,7 +336,7 @@ class Bigcommerce():
         else:
             return future
 
-    def resource(self, name, params={}, async_sub_resources=True):
+    def resource(self, name, params={}, async_sub_resources=True, current_page=None):
         resource = self.endpoints.get(name, {})
         version = resource.get('version', 3)
         path = resource.get('path', name)
@@ -362,16 +364,17 @@ class Bigcommerce():
 
         requests_need = self.results_per_page * sub_resources
 
-        page = 0
+        # If current_page is None in the beginning, set it to 0
+
+        # Maybe get rid of this while loop
         while True:
             error_count = 0
-            page += 1
+            page = current_page
 
             params = {**params, **{
                 'page': page,
                 'limit': self.results_per_page
             }}
-
             try:
                 r = self.get(url, params).result()
             except BigCommerceRateLimitException as e:
@@ -427,7 +430,5 @@ class Bigcommerce():
                     logger.error("{} errors, ending".format(error_count))
                     raise e
 
-            # assume results page with fewer values than `results_per_page` =
-            # no more results
-            if len(data) < self.results_per_page:
-                break
+            # Get one page and break
+            break

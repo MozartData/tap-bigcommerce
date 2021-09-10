@@ -69,15 +69,15 @@ class BigCommerce(Client):
         self.access_token = access_token
         self.store_hash = store_hash
         self.utcnow = singer.utils.now()
-        self._reset_session()
 
-    def _reset_session(self):
+    def reset_session(self):
         try:
             self.api = Bigcommerce(
                 client_id=self.client_id,
                 store_hash=self.store_hash,
                 access_token=self.access_token
             )
+            self.api.reset_session()
             self.authorized = True
         except Exception as e:
             self.authorized = False
@@ -91,41 +91,51 @@ class BigCommerce(Client):
 
     @parse_date_string_arguments('bookmark')
     @validate
-    def orders(self, replication_key, bookmark):
+    def orders(self, replication_key, bookmark, current_page):
 
-        for order in self.api.resource('orders', {
+        for order in self.api.resource(
+            name='orders',
+            params= {
                 'min_date_modified': bookmark.isoformat(),
                 'sort': 'date_modified:asc'
-        }):
+            },
+            current_page=current_page
+        ):
             yield order
 
     @parse_date_string_arguments('bookmark')
     @validate
-    def products(self, replication_key, bookmark):
+    def products(self, replication_key, bookmark, current_page):
 
-        for product in self.api.resource('products', {
+        for product in self.api.resource(
+            name='products',
+            params={
                 'date_modified:min': bookmark.isoformat(),
                 'sort': 'date_modified',
                 'direction': 'asc'
-        }):
+            },
+            current_page=current_page
+        ):
             yield product
 
     @parse_date_string_arguments('bookmark')
     @validate
-    def customers(self, replication_key, bookmark):
-        """
-        Customers endpoint can't sort by date_modified, so resource
-        is queried by day to ensure consistent replication key
-        """
+    def customers(self, replication_key, bookmark, current_page):
 
-        for start, end in self.iterdates(bookmark):
-            for customer in self.api.resource('customers', {
-                    'min_date_modified': start.isoformat(),
-                    'max_date_modified': end.isoformat()
-            }):
-                yield customer
+        for customer in self.api.resource(
+            name='customers',
+            params={
+                'date_modified:min': bookmark.isoformat(),
+                'sort': 'date_modified:asc'
+            },
+            current_page=current_page
+        ):
+            yield customer
 
-    def coupons(self):
+    def coupons(self, current_page):
 
-        for coupon in self.api.resource('coupons'):
+        for coupon in self.api.resource(
+            name='coupons',
+            current_page=current_page
+        ):
             yield coupon

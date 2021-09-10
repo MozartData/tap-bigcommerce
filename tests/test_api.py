@@ -154,6 +154,7 @@ class TestLiveAPICalls(unittest.TestCase):
     def test_api_get_returns_future(self):
 
         client = Bigcommerce(**self.api_config)
+        client.reset_session()
 
         url = client.make_url(2, 'orders')
 
@@ -165,6 +166,7 @@ class TestLiveAPICalls(unittest.TestCase):
             raise unittest.SkipTest("No BigCommmerce API config file set.")
 
         client = Bigcommerce(**self.api_config)
+        client.reset_session()
 
         start = time.time()
 
@@ -198,6 +200,7 @@ class TestLiveAPICalls(unittest.TestCase):
     # def test_get_orders(self):
 
     #     client = Bigcommerce(**self.api_config)
+    #     client.reset_session()
 
     #     client.resource('products', {'sort': 'date_modified:asc'})
 

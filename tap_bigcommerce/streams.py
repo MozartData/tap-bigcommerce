@@ -1,10 +1,10 @@
 #!/usr/bin/env python
-from singer import metadata
-from singer import utils
 import os
-import singer
-import tap_bigcommerce.utilities as tap_utils
 
+import singer
+from singer import metadata, utils
+
+import tap_bigcommerce.utilities as tap_utils
 
 logger = singer.get_logger().getChild('tap-bigcommerce')
 
@@ -128,24 +128,19 @@ class Stream():
     def sync(self, state):
         get_data = getattr(self.client, self.name)
 
+        current_page = singer.get_offset(state, self.name, {'current_page': 1}).get("current_page")
+        logger.info("Page to sync: {}".format(current_page))
+
         if self.replication_method == "INCREMENTAL":
             self.bookmark_start = self.get_bookmark(state)
             res = get_data(
                 replication_key=self.replication_key,
-                bookmark=self.bookmark_start
+                bookmark=self.bookmark_start,
+                current_page=current_page
             )
             for i, item in enumerate(res):
                 try:
-                    replication_value = item[self.replication_key]
-
-                    if self.is_bookmark_old(replication_value,
-                                            self.bookmark_start):
-
-                        yield (self.stream, item)
-
-                        self.update_session_bookmark_if_old(replication_value)
-                        self.update_bookmark_if_old(state)
-
+                    yield (self.stream, item)
                 except Exception as e:
                     logger.error(
                         'Handled exception: {error}'.format(error=str(e))
@@ -153,7 +148,7 @@ class Stream():
                     pass
 
         elif self.replication_method == "FULL_TABLE":
-            res = get_data()
+            res = get_data(current_page=current_page)
 
             for item in res:
                 yield (self.stream, item)
@@ -164,6 +159,8 @@ class Stream():
                     stream=self.name
                 )
             )
+        state = singer.set_offset(state, self.name, 'current_page', current_page+1)
+        singer.write_state(state)
 
 
 class Orders(Stream):
